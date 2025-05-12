@@ -24,33 +24,41 @@ class MergePdfService
                 $tempFilePath = tempnam(sys_get_temp_dir(), 'pdf_') . '.pdf';
                 $tempFiles[] = $tempFilePath;
 
-                $response = Http::withOptions(['verify' => false])->get($url);
-                if ($response->status() !== 200) {
-                    throw new \Exception("Failed to download file: $url");
-                }
+                try {
+                    $response = Http::withOptions(['verify' => false])->get($url);
+                    if ($response->status() !== 200) {
+                        throw new \Exception("Failed to download file: $url");
+                    }
 
-                file_put_contents($tempFilePath, $response->body());
+                    file_put_contents($tempFilePath, $response->body());
 
-                if (!file_exists($tempFilePath)) {
-                    throw new \Exception("File not found: $tempFilePath");
-                }
+                    if (!file_exists($tempFilePath)) {
+                        throw new \Exception("File not found: $tempFilePath");
+                    }
 
-                // Convert PDF to version 1.4 using Ghostscript
-                $convertedFilePath = $this->convertPdfToVersion14($tempFilePath);
-                $tempFiles[] = $convertedFilePath;
+                    // Convert PDF to version 1.4 using Ghostscript
+                    $convertedFilePath = $this->convertPdfToVersion14($tempFilePath);
+                    $tempFiles[] = $convertedFilePath;
 
-                // Add title to each page
-                $titledFilePath = $this->addTitleToPdf($convertedFilePath, $title);
-                $tempFiles[] = $titledFilePath;
+                    // Add title to each page
+                    $titledFilePath = $this->addTitleToPdf($convertedFilePath, $title);
+                    $tempFiles[] = $titledFilePath;
 
-                $pageCount = $pdf->setSourceFile($titledFilePath);
+                    $pageCount = $pdf->setSourceFile($titledFilePath);
 
-                for ($pageNo = 1; $pageNo <= $pageCount; $pageNo++) {
-                    $templateId = $pdf->importPage($pageNo);
-                    $size = $pdf->getTemplateSize($templateId);
+                    for ($pageNo = 1; $pageNo <= $pageCount; $pageNo++) {
+                        $templateId = $pdf->importPage($pageNo);
+                        $size = $pdf->getTemplateSize($templateId);
 
-                    $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
-                    $pdf->useTemplate($templateId);
+                        $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
+                        $pdf->useTemplate($templateId);
+                    }
+                } catch (\Exception $e) {
+                    \Log::error('Error processing document', [
+                        'file_path' => $url,
+                        'error' => $e->getMessage(),
+                    ]);
+                    continue; // Skip this document and proceed with the next
                 }
             }
 
@@ -75,7 +83,9 @@ class MergePdfService
 
             // Clean up temporary files
             foreach ($tempFiles as $tempFile) {
-                unlink($tempFile);
+                if (file_exists($tempFile)) {
+                    unlink($tempFile);
+                }
             }
 
             return $generatedUrl;
