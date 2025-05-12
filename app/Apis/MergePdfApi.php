@@ -17,6 +17,7 @@ class MergePdfApi
 
     public function mergeByPaths(Request $request): JsonResponse
     {
+        
         $paths = $request->input('paths');
         if (empty($paths) || !is_array($paths)) {
             return response()->json(['status' => 'error', 'message' => 'Invalid input'], 400);
